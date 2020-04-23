@@ -295,14 +295,7 @@ void loop() {
   unsigned long currentMillis1 = millis();
 
   if (currentMillis1 - previousMillis1 >= interval) {
-    previousMillis1 = currentMillis1;
-    lcd.clear();
-  }
-
-  //clear out data is no sats to prevent false averages
-  unsigned long currentMillis2 = millis();
-  if (currentMillis2 - previousMillis2 >= interval1) {
-    previousMillis1 = currentMillis1;
+   previousMillis1 = currentMillis1;
     if (gps.satellites.value() == 0) {
       GPSStats.clear();
       lcd.clear();
