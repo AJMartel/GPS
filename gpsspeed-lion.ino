@@ -1,59 +1,66 @@
-/* GPS Speedo by Morgan Lowe. I dont recall were I found the custom font so uh, whoever made, go you!
-   uses Arduino Nano and 20x4 LCD with Serial GPS
+/* GPS Speedo by Morgan Lowe. https://www.thingiverse.com/thing:4303760 
+   I dont recall were I found the custom font so uh, whoever made, go you!
+   Big Font very similar to https://forum.arduino.cc/index.php?topic=8882.0
+   uses Arduino Nano and I2C 20x4 LCD with Serial GPS
    Uses Statistics for arduino by  robtillaart  http://playground.arduino.cc/Main/Statistics
    Uses TinyGPS++ by Arduiniana http://arduiniana.org/libraries/tinygpsplus/
    Do what you will with this!
    On the nano SDA is pin A4 and SCL is pin A5
    Rx from GPS to pin 4 and TX to pin 3.
    Wire Pixels to pin 7.
-   Have fun! https://www.thingiverse.com/thing:4303760
-   Thanks to AJMartel https://github.com/AJMartel/GPS/blob/master/GPS_Lion.ino for the improved code!
+   Have fun! 
+   Thanks to AJMartel https://github.com/AJMartel/GPS for the improved code!
 */
-#define LAND   // LAND or SEA        >If SEA the unit will be in Knots, LAND could be KPH or MPH
-#define IMPERIAL // METRIC or IMPERIAL >If METRIC KPH and Meters, IMPERIAL MPH and Feet
+#define LAND                           // LAND or SEA        >If SEA the unit will be in Knots, LAND could be KPH or MPH
+#define IMPERIAL                       // METRIC or IMPERIAL >If METRIC KPH and Meters, IMPERIAL MPH and Feet
+#include <avr/pgmspace.h>              //Used to store "constant variables" in program space (mainly for messages displayed on LCD)
+//#include <EEPROM.h>                  //Library for internal EEPROM
 
 #include <TimeLib.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 #include "Statistic.h"
-#include <Wire.h>  // Comes with Arduino IDE++
+#include <Wire.h>                      // Comes with Arduino IDE++
 #include <LiquidCrystal_I2C.h>
-//LED Drive
+//LED Driver
 #include <Adafruit_NeoPixel.h>
-// Which pin on the Arduino is connected to the NeoPixels?
-#define PIN            7
-// How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      4  //set number of pixels here, I have 4 in a strip with the first disabled because it's under the heat shrink.
-// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
-// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-// example for more information on possible values.
+#define PIN            7               // Which pin on the Arduino is connected to the NeoPixels?
+                                       // How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS      4               //set number of pixels here, I have 4 in a strip with the first disabled because it's under the heat shrink.
+                                       // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
+                                       // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
+                                       // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 int onval = 1;
-int delayval = 500; // delay for half a second
+int delayval = 500;                    // delay for half a second
 int satval = 0;
 int dispt = 0;
-unsigned long timeOut;            // Backlight timeout variable
-long previousMillis = 0;
-long previousMillis2 = 0;
-long interval;
+unsigned long timeOut;                 // Backlight timeout variable
+unsigned long previousMillis = 0;
+unsigned long previousMillis2 = 0;
+unsigned long interval;
 static const int RXPin = 3, TXPin = 4; //GPS Pins
 static const uint32_t GPSBaud = 9600;  //GPS Baud rate, set to default of Ublox module
-Statistic GPSStats;  //setup stats
-unsigned long previousMillis1 = 0; // last time update
-const long interval1 = 15000; // interval at which to do something (milliseconds)
+Statistic GPSStats;                    //setup stats
+unsigned long previousMillis1 = 0;     // last time update
+const unsigned long interval1 = 15000; // interval at which to do something (milliseconds)
 
 //Time
-byte Hour = 0;
-byte Minute = 0;
+uint8_t Hour = 0;
+uint8_t Minute = 0;
+uint8_t Second = 0;
+uint8_t Day = 0;
+uint8_t Month = 0;
+uint16_t Year = 0;
 // Offset hours from gps time (UTC)
-const int UTC_offset = -5;   // US CST with DST
+int UTC_offset = -5;                   // US CST with DST
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
 // The serial connection to the GPS device
 SoftwareSerial ss(RXPin, TXPin);
 
-LiquidCrystal_I2C lcd(0x27, 20, 4); // Set the LCD I2C address
+LiquidCrystal_I2C lcd(0x27, 20, 4);    // Set the LCD I2C address
 
 //Below are the custom characters for the large speed display
 int x = 0;
@@ -147,19 +154,19 @@ byte LMB[8] =
   B11111
 };
 
-TinyGPSCustom zdop(gps, "GPVTG", 7); // $GPVTG sentence, 7th element
+TinyGPSCustom zdop(gps, "GPVTG", 7);   // $GPVTG sentence, 7th element
 
 void setup()
 {
   ss.begin(GPSBaud);
-  lcd.init();                        // initialize the lcd
-  timeOut = millis();                // Set the initial backlight time
+  lcd.init();                          // initialize the lcd
+  timeOut = millis();                  // Set the initial backlight time
   delay(10);
-  GPSStats.clear();                  //Reset the stats
-                                     //LED Setup
-  pixels.begin();                    // This initializes the NeoPixel library.
-  lcd.clear();                       // clear the screen - intro below!
-                                     // assignes each segment a write number
+  GPSStats.clear();                    //Reset the stats
+                                       //LED Setup
+  pixels.begin();                      // This initializes the NeoPixel library.
+  lcd.clear();                         // clear the screen - intro below!
+                                       // assignes each segment a write number
   lcd.createChar(1, UB);
   lcd.createChar(2, RT);
   lcd.createChar(3, LL);
@@ -168,23 +175,23 @@ void setup()
   lcd.createChar(6, UMB);
   lcd.createChar(7, LMB);
   lcd.createChar(8, LT);
-  lcd.backlight();                   // turn on backlight
-  lcd.clear();                       // clear the screen - intro below!
-  lcd.setCursor(1, 0);               // put cursor at colon x and row y
-  lcd.print("   MORNINGLION ");      // print a text
-  lcd.setCursor(0, 1);               // put cursor at colon x and row y
-  lcd.print("     INDUSTRIES");      // print a text
-  lcd.setCursor(1, 2);               // put cursor at colon x and row y
-  lcd.print("GPS data - Lion 4.0");  // print a text
-  lcd.setCursor(0, 3);               // put cursor at colon x and row y
-  lcd.print("  GPS Speedometer ");   // print a text
+  lcd.backlight();                     // turn on backlight
+  lcd.clear();                         // clear the screen - intro below!
+  lcd.setCursor(1, 0);                 // put cursor at colon x and row y
+  lcd.print(F("   MORNINGLION "));        // print a text
+  lcd.setCursor(0, 1);                 // put cursor at colon x and row y
+  lcd.print(F("     INDUSTRIES"));        // print a text
+  lcd.setCursor(1, 2);                 // put cursor at colon x and row y
+  lcd.print(F("GPS data - Lion 4.0"));    // print a text
+  lcd.setCursor(0, 3);                 // put cursor at colon x and row y
+  lcd.print(F("  GPS Speedometer "));     // print a text
   delay (5000);
   lcd.clear();
 }
 
 void loop() {
 
-  int satval = gps.satellites.value();      //check sats availible and set to satval
+  int satval = gps.satellites.value(); //check sats availible and set to satval
   if (satval >= 13) {
     satval = 12;
   }
@@ -193,11 +200,11 @@ void loop() {
   //below turns off the backlight if it's just waiting for satelites
   if (satval >= 1) {
     timeOut = millis();
-    lcd.backlight();                 // turn on backlight
+    lcd.backlight();                   // turn on backlight
     onval = 1;
   }
   else if ((millis() - timeOut) > 30000) {  // Turn off backlight for 30 seconds, else turn it off
-    lcd.noBacklight();               // turn off backlight
+    lcd.noBacklight();                 // turn off backlight
     onval = 0;
   }
 
@@ -276,14 +283,14 @@ void loop() {
     }
   }
 
-  if (onval == 0) {  //if the backlight is off turn off pixels too
+  if (onval == 0) {                    //if the backlight is off turn off pixels too
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
 
   }
 
-  pixels.show(); // This sends the updated pixel color to the hardware.
+  pixels.show();                       // This sends the updated pixel color to the hardware.
 
   unsigned long currentMillis1 = millis();
 
@@ -305,27 +312,27 @@ void loop() {
   //Add data to stats & Code for unit change
   #ifdef LAND
     #ifdef METRIC
-      GPSStats.add(gps.speed.kmph());        //Send speed to Stats for average and max
-      int speed = (gps.speed.kmph());        //collect speed for display
+      GPSStats.add(gps.speed.kmph());  //Send speed to Stats for average and max
+      int speed = (gps.speed.kmph());  //collect speed for display
     #else
-      GPSStats.add(gps.speed.mph());         //Send speed to Stats for average and max
-      int speed = (gps.speed.mph());         //collect speed for display 
+      GPSStats.add(gps.speed.mph());   //Send speed to Stats for average and max
+      int speed = (gps.speed.mph());   //collect speed for display 
     #endif
   #else
-    GPSStats.add(gps.speed.knots());         //Send speed to Stats for average and max 
-    int speed = (gps.speed.knots());         //collect speed for display  
+    GPSStats.add(gps.speed.knots());   //Send speed to Stats for average and max 
+    int speed = (gps.speed.knots());   //collect speed for display  
   #endif
     screen();
     speedcalc(speed);
     lcd.setCursor(11, 3);
   #ifdef LAND
     #ifdef METRIC
-      lcd.print("KPH");
+      lcd.print(F("KPH"));
     #else
-      lcd.print("MPH");
+      lcd.print(F("MPH"));
     #endif
   #else
-    lcd.print("Kts");
+    lcd.print(F("Kts"));
   #endif 
    
   smartDelay(1000);
@@ -347,9 +354,12 @@ static void smartDelay(unsigned long ms)
 
 static void screen() {
   //Time setup
-  Hour = gps.time.hour();
+  Hour   = gps.time.hour();
   Minute = gps.time.minute();
-  int Year, Month, Day, Second;
+  Second = gps.time.second();
+  Day    = gps.date.day();
+  Month  = gps.date.month();
+  Year   = gps.date.year();
   // Set Time from GPS data string
   setTime(Hour, Minute, Second, Day, Month, Year);
   delay(10);
@@ -363,19 +373,19 @@ static void screen() {
   if (dispt > 12) {
     dispt = (dispt - 12);
     lcd.setCursor(18, 1);
-    lcd.print("PM");
+    lcd.print(F("PM"));
   }
   else {
     lcd.setCursor(18, 1);
-    lcd.print("AM");
+    lcd.print(F("AM"));
   }
 
   //put the : in the time
   lcd.setCursor(12, 1);
-  if (dispt < 10) lcd.print(" ");
+  if (dispt < 10) lcd.print(F(" "));
   lcd.print(dispt);
-  lcd.print(":");
-  if (minute() < 10) lcd.print("0");
+  lcd.print(F(":"));
+  if (minute() < 10) lcd.print(F("0"));
   lcd.print(minute());
 
   //Measure altitude
@@ -387,47 +397,47 @@ static void screen() {
   #endif
     lcd.setCursor(15, 3);
   #ifdef METRIC
-    lcd.print("METER");
+    lcd.print(F("METER"));
   #else
-    lcd.print("^FEET");
+    lcd.print(F("^FEET"));
   #endif
 
   //average speed
   lcd.setCursor(0, 1);
-  lcd.print("AVG:");
+  lcd.print(F("AVG:"));
   lcd.print(GPSStats.average(), 0);
   #ifdef LAND
     #ifdef METRIC
-      lcd.print("KPH");
+      lcd.print(F("KPH"));
     #else
-      lcd.print("MPH");
+      lcd.print(F("MPH"));
     #endif
   #else
-    lcd.print("Kts");
+    lcd.print(F("Kts"));
   #endif
 
   //max speed
-  lcd.setCursor(0, 0);                       // put cursor at colon 0 and row 0 = left/up
-  lcd.print("MAX:");
+  lcd.setCursor(0, 0);                 // put cursor at colon 0 and row 0 = left/up
+  lcd.print(F("MAX:"));
   lcd.print(GPSStats.maximum(), 0);
   #ifdef LAND
     #ifdef METRIC
-      lcd.print("KPH");
+      lcd.print(F("KPH"));
     #else
-      lcd.print("MPH");
+      lcd.print(F("MPH"));
     #endif
   #else
-    lcd.print("Kts");
+    lcd.print(F("Kts"));
   #endif
 
   // Sat Numbers
   lcd.setCursor(14, 0);
   lcd.print(gps.satellites.value());
-  lcd.print(" SATS");
+  lcd.print(F(" SATS"));
 }
 
 
-void custom0O()  // uses segments to build the number 0
+void custom0O()                        // uses segments to build the number 0
 {
   lcd.setCursor(x, 2);
   lcd.write(8);
@@ -594,9 +604,9 @@ void speedcalc(int speed)
 {
 
   lcd.setCursor(0, 2);
-  lcd.print("           ");
+  lcd.print(F("           "));
   lcd.setCursor(0, 3);
-  lcd.print("           ");
+  lcd.print(F("           "));
 
   if (speed >= 100)
   {
@@ -613,9 +623,9 @@ void speedcalc(int speed)
   else if (speed >= 10)
   {
     lcd.setCursor(0, 2);
-    lcd.print("   ");
+    lcd.print(F("   "));
     lcd.setCursor(0, 3);
-    lcd.print("   ");
+    lcd.print(F("   "));
 
     x = 4;
     tempvar(speed / 10);
@@ -626,9 +636,9 @@ void speedcalc(int speed)
   else if (speed < 10)
   {
     lcd.setCursor(0, 2);
-    lcd.print("       ");
+    lcd.print(F("       "));
     lcd.setCursor(0, 3);
-    lcd.print("       ");
+    lcd.print(F("       "));
     x = 8;
     tempvar(speed);
   }
