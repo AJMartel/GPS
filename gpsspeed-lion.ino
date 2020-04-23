@@ -6,7 +6,10 @@
    On the nano SDA is pin A4 and SCL is pin A5
    Rx from GPS to pin 4 and TX to pin 3.
    Wire Pixels to pin 7.
-   Have fun! */
+   Have fun! https://www.thingiverse.com/thing:4303760 */
+
+#define LAND   // LAND or SEA        >If SEA the unit will be in Knots, LAND could be KPH or MPH
+#define METRIC // METRIC or IMPERIAL >If METRIC KPH and Meters, IMPERIAL MPH and Feet
 
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
@@ -141,15 +144,14 @@ TinyGPSCustom zdop(gps, "GPVTG", 7); // $GPVTG sentence, 7th element
 void setup()
 {
   ss.begin(GPSBaud);
-  lcd.init();                      // initialize the lcd
-  lcd.init();
-  timeOut = millis();     // Set the initial backlight time
+  lcd.init();                        // initialize the lcd
+  timeOut = millis();                // Set the initial backlight time
   delay(100);
-  GPSStats.clear();  //Reset the stats
-  //LED Setup
-  pixels.begin(); // This initializes the NeoPixel library.
-  lcd.clear(); // clear the screen - intro below!
-  // assignes each segment a write number
+  GPSStats.clear();                  //Reset the stats
+                                     //LED Setup
+  pixels.begin();                    // This initializes the NeoPixel library.
+  lcd.clear();                       // clear the screen - intro below!
+                                     // assignes each segment a write number
   lcd.createChar(1, UB);
   lcd.createChar(2, RT);
   lcd.createChar(3, LL);
@@ -158,44 +160,41 @@ void setup()
   lcd.createChar(6, UMB);
   lcd.createChar(7, LMB);
   lcd.createChar(8, LT);
-  lcd.backlight(); // turn on backlight
-  lcd.clear(); // clear the screen - intro below!
-  lcd.setCursor(1, 0); // put cursor at colon x and row y
-  lcd.print("   MORNINGLION "); // print a text
-  lcd.setCursor(0, 1); // put cursor at colon x and row y
-  lcd.print("     INDUSTRIES"); // print a text
-  lcd.setCursor(1, 2); // put cursor at colon x and row y
-  lcd.print("GPS data - Lion 4.0"); // print a text
-  lcd.setCursor(0, 3); // put cursor at colon x and row y
-  lcd.print("  GPS Speedometer "); // print a text
+  lcd.backlight();                   // turn on backlight
+  lcd.clear();                       // clear the screen - intro below!
+  lcd.setCursor(1, 0);               // put cursor at colon x and row y
+  lcd.print("   MORNINGLION ");      // print a text
+  lcd.setCursor(0, 1);               // put cursor at colon x and row y
+  lcd.print("     INDUSTRIES");      // print a text
+  lcd.setCursor(1, 2);               // put cursor at colon x and row y
+  lcd.print("GPS data - Lion 4.0");  // print a text
+  lcd.setCursor(0, 3);               // put cursor at colon x and row y
+  lcd.print("  GPS Speedometer ");   // print a text
   delay (5000);
   lcd.clear();
 }
 
 void loop() {
 
-  int satval = gps.satellites.value();  //check sats availible and set to satval
+  int satval = gps.satellites.value();     //check sats availible and set to satval
   if (satval >= 13) {
     satval = 12;
   }
 
-
 //below turns off the backlight if it's just waiting for satelites
   if (satval >= 1) {
     timeOut = millis();
-    lcd.backlight(); // turn on backlight
+    lcd.backlight();                 // turn on backlight
     onval = 1;
   }
-  else if ((millis() - timeOut) > 30000) {                   // Turn off backlight for 30 seconds, else turn it off
-    lcd.noBacklight(); // turn off backlight
+  else if ((millis() - timeOut) > 30000) { // Turn off backlight for 30 seconds, else turn it off
+    lcd.noBacklight();               // turn off backlight
     onval = 0;
   }
 
   delay(100);
-
-  //LEDs
-  // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-
+                                     //LEDs
+                                     // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
   if (onval == 1) {
     switch (satval) {
       case 0:
@@ -284,7 +283,6 @@ void loop() {
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-
   }
 
   pixels.show(); // This sends the updated pixel color to the hardware.
@@ -306,14 +304,30 @@ void loop() {
     }
   }
 
-  GPSStats.add(gps.speed.mph()); //Send speed to Stats for average and max
-
+#ifdef LAND
+  #ifdef METRIC
+    GPSStats.add(gps.speed.kmph()); //Send speed to Stats for average and max
+    int speed = (gps.speed.kmph());  //collect speed for display
+  #else
+    GPSStats.add(gps.speed.mph()); //Send speed to Stats for average and max
+    int speed = (gps.speed.mph());  //collect speed for display 
+  #endif
+#else
+  GPSStats.add(gps.speed.knots()); //Send speed to Stats for average and max 
+  int speed = (gps.speed.knots());  //collect speed for display  
+#endif
   screen();
-
-  int speed = (gps.speed.mph());  //collect speed for display
   speedcalc(speed);
   lcd.setCursor(11, 3);
-  lcd.print("MPH");
+#ifdef LAND
+  #ifdef METRIC
+    lcd.print("KPH");
+  #else
+    lcd.print("MPH");
+  #endif
+#else
+  lcd.print("Kts");
+#endif  
   smartDelay(1000);
 }
 
@@ -356,21 +370,45 @@ static void screen() {
 
 //Measure altitude in feet
   lcd.setCursor(14, 2);
-  lcd.print(gps.altitude.feet());
+  #ifdef METRIC
+    lcd.print(gps.altitude.meters());
+  #else
+    lcd.print(gps.altitude.feet());
+  #endif
   lcd.setCursor(15, 3);
+  #ifdef METRIC
+    lcd.print("METER");
+  #else
     lcd.print("^FEET");
+  #endif
 
   //average speed
   lcd.setCursor(0, 1);
   lcd.print("AVG:");
   lcd.print(GPSStats.average(), 0);
-  lcd.print("MPH");
+#ifdef LAND
+  #ifdef METRIC
+    lcd.print("KPH");
+  #else
+    lcd.print("MPH");
+  #endif
+#else
+  lcd.print("Kts");
+#endif  
 
   //max speed
   lcd.setCursor(0, 0); // put cursor at colon 0 and row 0 = left/up
   lcd.print("MAX:");
   lcd.print(GPSStats.maximum(), 0);
-  lcd.print("MPH");
+#ifdef LAND
+  #ifdef METRIC
+    lcd.print("KPH");
+  #else
+    lcd.print("MPH");
+  #endif
+#else
+  lcd.print("Kts");
+#endif  
 
   // Sat Numbers
   lcd.setCursor(14, 0);
@@ -541,7 +579,7 @@ void tempvar(int numar)
   }
 }
 
-//calculate the speed in MPH
+//calculate the speed in KPH, MPH or Kts
 void speedcalc(int speed)
 {
 
@@ -549,7 +587,6 @@ void speedcalc(int speed)
   lcd.print("           ");
   lcd.setCursor(0, 3);
   lcd.print("           ");
-
   if (speed >= 100)
   {
     x = 0;
@@ -584,5 +621,4 @@ void speedcalc(int speed)
     x = 8;
     tempvar(speed);
   }
-
 }
