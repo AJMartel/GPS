@@ -32,7 +32,7 @@
                                        // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
                                        // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEO_PIN, NEO_GRB + NEO_KHZ800);
-bool onval = 1;
+int onval = 1;
 //int delayval = 500;                    // delay for half a second
 int satval = 0;
 int dispt = 0;
