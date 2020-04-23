@@ -24,26 +24,23 @@
 #include <LiquidCrystal_I2C.h>
 //LED Driver
 #include <Adafruit_NeoPixel.h>
-#define PIN            7               // Which pin on the Arduino is connected to the NeoPixels?
+#define NEO_PIN        7               // Which pin on the Arduino is connected to the NeoPixels?
                                        // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      4               //set number of pixels here, I have 4 in a strip with the first disabled because it's under the heat shrink.
                                        // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
                                        // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
                                        // example for more information on possible values.
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEO_PIN, NEO_GRB + NEO_KHZ800);
 int onval = 1;
 int delayval = 500;                    // delay for half a second
 int satval = 0;
 int dispt = 0;
 unsigned long timeOut;                 // Backlight timeout variable
-unsigned long previousMillis = 0;
-unsigned long previousMillis2 = 0;
-unsigned long interval;
+unsigned long previousMillis = 0;      // last time update
+unsigned long interval = 15000;        // interval at which to do something (milliseconds)
 static const int RXPin = 3, TXPin = 4; //GPS Pins
 static const uint32_t GPSBaud = 9600;  //GPS Baud rate, set to default of Ublox module
 Statistic GPSStats;                    //setup stats
-unsigned long previousMillis1 = 0;     // last time update
-const unsigned long interval1 = 15000; // interval at which to do something (milliseconds)
 
 //Time
 uint8_t Hour = 0;
@@ -292,17 +289,10 @@ void loop() {
 
   pixels.show();                       // This sends the updated pixel color to the hardware.
 
-  unsigned long currentMillis1 = millis();
-
-  if (currentMillis1 - previousMillis1 >= interval) {
-    previousMillis1 = currentMillis1;
-    lcd.clear();
-  }
-
   //clear out data is no sats to prevent false averages
-  unsigned long currentMillis2 = millis();
-  if (currentMillis2 - previousMillis2 >= interval1) {
-    previousMillis1 = currentMillis1;
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
     if (gps.satellites.value() == 0) {
       GPSStats.clear();
       lcd.clear();
@@ -312,16 +302,14 @@ void loop() {
   //Add data to stats & Code for unit change
   #ifdef LAND
     #ifdef METRIC
-      GPSStats.add(gps.speed.kmph());  //Send speed to Stats for average and max
-      int speed = (gps.speed.kmph());  //collect speed for display
+      int speed = (gps.speed.kmph());  //Speed in kilometers per hour (double)
     #else
-      GPSStats.add(gps.speed.mph());   //Send speed to Stats for average and max
-      int speed = (gps.speed.mph());   //collect speed for display 
+      int speed = (gps.speed.mph());   //Speed in miles per hour (double)
     #endif
   #else
-    GPSStats.add(gps.speed.knots());   //Send speed to Stats for average and max 
-    int speed = (gps.speed.knots());   //collect speed for display  
+    int speed = (gps.speed.knots());   //Speed in knots (double)  
   #endif
+    GPSStats.add(speed);               //Send speed to Stats for average and max
     screen();
     speedcalc(speed);
     lcd.setCursor(11, 3);
@@ -354,12 +342,12 @@ static void smartDelay(unsigned long ms)
 
 static void screen() {
   //Time setup
-  Hour   = gps.time.hour();
-  Minute = gps.time.minute();
-  Second = gps.time.second();
-  Day    = gps.date.day();
-  Month  = gps.date.month();
-  Year   = gps.date.year();
+  Hour   = gps.time.hour();            //Hour (0-23) (u8)
+  Minute = gps.time.minute();          //Minute (0-59) (u8)
+  Second = gps.time.second();          //Second (0-59) (u8)
+  Day    = gps.date.day();             //Day (1-31) (u8)
+  Month  = gps.date.month();           //Month (1-12) (u8)
+  Year   = gps.date.year();            //Year (2000+) (u16)
   // Set Time from GPS data string
   setTime(Hour, Minute, Second, Day, Month, Year);
   delay(10);
@@ -391,9 +379,9 @@ static void screen() {
   //Measure altitude
   lcd.setCursor(14, 2);
   #ifdef METRIC
-    lcd.print(gps.altitude.meters());
+    lcd.print(gps.altitude.meters());  // Altitude in meters (double)
   #else
-    lcd.print(gps.altitude.feet());
+    lcd.print(gps.altitude.feet());    // Altitude in feet (double)
   #endif
     lcd.setCursor(15, 3);
   #ifdef METRIC
