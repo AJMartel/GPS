@@ -2,15 +2,17 @@
    uses Arduino Nano and 20x4 LCD with Serial GPS
    Uses Statistics for arduino by  robtillaart  http://playground.arduino.cc/Main/Statistics
    Uses TinyGPS++ by Arduiniana http://arduiniana.org/libraries/tinygpsplus/
-   Do what you will with this! 
+   Do what you will with this!
    On the nano SDA is pin A4 and SCL is pin A5
    Rx from GPS to pin 4 and TX to pin 3.
    Wire Pixels to pin 7.
-   Have fun! https://www.thingiverse.com/thing:4303760 */
-
+   Have fun! https://www.thingiverse.com/thing:4303760
+   Thanks to AJMartel https://github.com/AJMartel/GPS/blob/master/GPS_Lion.ino for the improved code!
+*/
 #define LAND   // LAND or SEA        >If SEA the unit will be in Knots, LAND could be KPH or MPH
-#define METRIC // METRIC or IMPERIAL >If METRIC KPH and Meters, IMPERIAL MPH and Feet
+#define IMPERIAL // METRIC or IMPERIAL >If METRIC KPH and Meters, IMPERIAL MPH and Feet
 
+#include <TimeLib.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 #include "Statistic.h"
@@ -39,6 +41,12 @@ static const uint32_t GPSBaud = 9600;  //GPS Baud rate, set to default of Ublox 
 Statistic GPSStats;  //setup stats
 unsigned long previousMillis1 = 0; // last time update
 const long interval1 = 15000; // interval at which to do something (milliseconds)
+
+//Time
+byte Hour = 0;
+byte Minute = 0;
+// Offset hours from gps time (UTC)
+const int UTC_offset = -5;   // US CST with DST
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -146,7 +154,7 @@ void setup()
   ss.begin(GPSBaud);
   lcd.init();                        // initialize the lcd
   timeOut = millis();                // Set the initial backlight time
-  delay(100);
+  delay(10);
   GPSStats.clear();                  //Reset the stats
                                      //LED Setup
   pixels.begin();                    // This initializes the NeoPixel library.
@@ -176,104 +184,94 @@ void setup()
 
 void loop() {
 
-  int satval = gps.satellites.value();     //check sats availible and set to satval
+  int satval = gps.satellites.value();      //check sats availible and set to satval
   if (satval >= 13) {
     satval = 12;
   }
 
-//below turns off the backlight if it's just waiting for satelites
+
+  //below turns off the backlight if it's just waiting for satelites
   if (satval >= 1) {
     timeOut = millis();
     lcd.backlight();                 // turn on backlight
     onval = 1;
   }
-  else if ((millis() - timeOut) > 30000) { // Turn off backlight for 30 seconds, else turn it off
+  else if ((millis() - timeOut) > 30000) {  // Turn off backlight for 30 seconds, else turn it off
     lcd.noBacklight();               // turn off backlight
     onval = 0;
   }
 
   delay(100);
-                                     //LEDs
-                                     // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
+
+  //LEDs
+  // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
+
   if (onval == 1) {
     switch (satval) {
       case 0:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 0, 0));
         pixels.setPixelColor(1, pixels.Color(80, 0, 0));
         pixels.setPixelColor(2, pixels.Color(80, 0, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 0, 0));
         break;
       case 1:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(1, pixels.Color(80, 30, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 30, 0));
+        pixels.setPixelColor(1, pixels.Color(80, 0, 0));
         pixels.setPixelColor(2, pixels.Color(80, 0, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 0, 0));
         break;
       case 2:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 30, 0));
         pixels.setPixelColor(1, pixels.Color(80, 30, 0));
-        pixels.setPixelColor(2, pixels.Color(80, 30, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 0, 0));
+        pixels.setPixelColor(2, pixels.Color(80, 0, 0));
         break;
       case 3:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 30, 0));
         pixels.setPixelColor(1, pixels.Color(80, 30, 0));
         pixels.setPixelColor(2, pixels.Color(80, 30, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 30, 0));
         break;
       case 4:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(1, pixels.Color(0, 80, 0));
+        pixels.setPixelColor(0, pixels.Color(0, 80, 0));
+        pixels.setPixelColor(1, pixels.Color(80, 30, 0));
         pixels.setPixelColor(2, pixels.Color(80, 30, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 30, 0));
         break;
       case 5:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(0, 80, 0));
         pixels.setPixelColor(1, pixels.Color(0, 80, 0));
-        pixels.setPixelColor(2, pixels.Color(0, 80, 0));
-        pixels.setPixelColor(3, pixels.Color(80, 30, 0));
+        pixels.setPixelColor(2, pixels.Color(80, 30, 0));
         break;
       case 6:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(0, 80, 0));
         pixels.setPixelColor(1, pixels.Color(0, 80, 0));
         pixels.setPixelColor(2, pixels.Color(0, 80, 0));
-        pixels.setPixelColor(3, pixels.Color(0, 80, 0));
         break;
       case 7:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(1, pixels.Color(0, 0, 80));
+        pixels.setPixelColor(0, pixels.Color(0, 0, 80));
+        pixels.setPixelColor(1, pixels.Color(0, 80, 0));
         pixels.setPixelColor(2, pixels.Color(0, 80, 0));
-        pixels.setPixelColor(3, pixels.Color(0, 80, 0));
         break;
       case 8:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(0, 0, 80));
         pixels.setPixelColor(1, pixels.Color(0, 0, 80));
-        pixels.setPixelColor(2, pixels.Color(0, 0, 80));
-        pixels.setPixelColor(3, pixels.Color(0, 80, 0));
+        pixels.setPixelColor(2, pixels.Color(0, 80, 0));
         break;
       case 9:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(0, 0, 80));
         pixels.setPixelColor(1, pixels.Color(0, 0, 80));
         pixels.setPixelColor(2, pixels.Color(0, 0, 80));
-        pixels.setPixelColor(3, pixels.Color(0, 0, 80));
         break;
       case 10:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-        pixels.setPixelColor(1, pixels.Color(80, 0, 80));
+        pixels.setPixelColor(0, pixels.Color(80, 0, 80));
+        pixels.setPixelColor(1, pixels.Color(0, 0, 80));
         pixels.setPixelColor(2, pixels.Color(0, 0, 80));
-        pixels.setPixelColor(3, pixels.Color(0, 0, 80));
         break;
       case 11:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 0, 80));
         pixels.setPixelColor(1, pixels.Color(80, 0, 80));
-        pixels.setPixelColor(2, pixels.Color(80, 0, 80));
-        pixels.setPixelColor(3, pixels.Color(0, 0, 80));
+        pixels.setPixelColor(2, pixels.Color(0, 0, 80));
         break;
       case 12:
-        pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+        pixels.setPixelColor(0, pixels.Color(80, 0, 80));
         pixels.setPixelColor(1, pixels.Color(80, 0, 80));
         pixels.setPixelColor(2, pixels.Color(80, 0, 80));
-        pixels.setPixelColor(3, pixels.Color(80, 0, 80));
         break;
     }
   }
@@ -282,7 +280,7 @@ void loop() {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
+
   }
 
   pixels.show(); // This sends the updated pixel color to the hardware.
@@ -304,32 +302,35 @@ void loop() {
     }
   }
 
-#ifdef LAND
-  #ifdef METRIC
-    GPSStats.add(gps.speed.kmph()); //Send speed to Stats for average and max
-    int speed = (gps.speed.kmph());  //collect speed for display
+  //Add data to stats & Code for unit change
+  #ifdef LAND
+    #ifdef METRIC
+      GPSStats.add(gps.speed.kmph());        //Send speed to Stats for average and max
+      int speed = (gps.speed.kmph());        //collect speed for display
+    #else
+      GPSStats.add(gps.speed.mph());         //Send speed to Stats for average and max
+      int speed = (gps.speed.mph());         //collect speed for display 
+    #endif
   #else
-    GPSStats.add(gps.speed.mph()); //Send speed to Stats for average and max
-    int speed = (gps.speed.mph());  //collect speed for display 
+    GPSStats.add(gps.speed.knots());         //Send speed to Stats for average and max 
+    int speed = (gps.speed.knots());         //collect speed for display  
   #endif
-#else
-  GPSStats.add(gps.speed.knots()); //Send speed to Stats for average and max 
-  int speed = (gps.speed.knots());  //collect speed for display  
-#endif
-  screen();
-  speedcalc(speed);
-  lcd.setCursor(11, 3);
-#ifdef LAND
-  #ifdef METRIC
-    lcd.print("KPH");
+    screen();
+    speedcalc(speed);
+    lcd.setCursor(11, 3);
+  #ifdef LAND
+    #ifdef METRIC
+      lcd.print("KPH");
+    #else
+      lcd.print("MPH");
+    #endif
   #else
-    lcd.print("MPH");
-  #endif
-#else
-  lcd.print("Kts");
-#endif  
+    lcd.print("Kts");
+  #endif 
+   
   smartDelay(1000);
 }
+
 
 // This custom version of delay() ensures that the gps object
 // is being "fed".
@@ -343,39 +344,48 @@ static void smartDelay(unsigned long ms)
   } while (millis() - start < ms);
 }
 
-static void screen() {
 
-  int dispt = (gps.time.hour() - 5);    //CHANGE FOR TIME OFFSET TO GPS, GPS IS GMT
-  if (dispt < 0)dispt *= -1;
-  lcd.setCursor(18, 1);
-  lcd.print("AM");
-  if (dispt >= 12)
-  {
-    dispt = dispt - 12;
+static void screen() {
+  //Time setup
+  Hour = gps.time.hour();
+  Minute = gps.time.minute();
+  int Year, Month, Day, Second;
+  // Set Time from GPS data string
+  setTime(Hour, Minute, Second, Day, Month, Year);
+  delay(10);
+  // Calc current Time Zone time by offset value
+  byte dispt = (hour() + UTC_offset);
+
+  if (dispt == 0) {
+    dispt = (dispt + 12);
+  }
+
+  if (dispt > 12) {
+    dispt = (dispt - 12);
     lcd.setCursor(18, 1);
     lcd.print("PM");
   }
-  if (dispt == 0)
-  {
-    dispt = dispt + 12;
+  else {
+    lcd.setCursor(18, 1);
+    lcd.print("AM");
   }
 
-//put the : in the time
+  //put the : in the time
   lcd.setCursor(12, 1);
   if (dispt < 10) lcd.print(" ");
   lcd.print(dispt);
   lcd.print(":");
-  if (gps.time.minute() < 10) lcd.print("0");
-  lcd.print(gps.time.minute());
+  if (minute() < 10) lcd.print("0");
+  lcd.print(minute());
 
-//Measure altitude in feet
+  //Measure altitude
   lcd.setCursor(14, 2);
   #ifdef METRIC
     lcd.print(gps.altitude.meters());
   #else
     lcd.print(gps.altitude.feet());
   #endif
-  lcd.setCursor(15, 3);
+    lcd.setCursor(15, 3);
   #ifdef METRIC
     lcd.print("METER");
   #else
@@ -386,29 +396,29 @@ static void screen() {
   lcd.setCursor(0, 1);
   lcd.print("AVG:");
   lcd.print(GPSStats.average(), 0);
-#ifdef LAND
-  #ifdef METRIC
-    lcd.print("KPH");
+  #ifdef LAND
+    #ifdef METRIC
+      lcd.print("KPH");
+    #else
+      lcd.print("MPH");
+    #endif
   #else
-    lcd.print("MPH");
+    lcd.print("Kts");
   #endif
-#else
-  lcd.print("Kts");
-#endif  
 
   //max speed
-  lcd.setCursor(0, 0); // put cursor at colon 0 and row 0 = left/up
+  lcd.setCursor(0, 0);                       // put cursor at colon 0 and row 0 = left/up
   lcd.print("MAX:");
   lcd.print(GPSStats.maximum(), 0);
-#ifdef LAND
-  #ifdef METRIC
-    lcd.print("KPH");
+  #ifdef LAND
+    #ifdef METRIC
+      lcd.print("KPH");
+    #else
+      lcd.print("MPH");
+    #endif
   #else
-    lcd.print("MPH");
+    lcd.print("Kts");
   #endif
-#else
-  lcd.print("Kts");
-#endif  
 
   // Sat Numbers
   lcd.setCursor(14, 0);
@@ -579,7 +589,7 @@ void tempvar(int numar)
   }
 }
 
-//calculate the speed in KPH, MPH or Kts
+//calculate the speed
 void speedcalc(int speed)
 {
 
@@ -587,6 +597,7 @@ void speedcalc(int speed)
   lcd.print("           ");
   lcd.setCursor(0, 3);
   lcd.print("           ");
+
   if (speed >= 100)
   {
     x = 0;
@@ -621,4 +632,5 @@ void speedcalc(int speed)
     x = 8;
     tempvar(speed);
   }
+
 }
