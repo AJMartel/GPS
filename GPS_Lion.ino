@@ -15,8 +15,6 @@
    Thanks to AJMartel https://github.com/AJMartel/GPS for the improved code!
 */
 #include <avr/pgmspace.h>              //Used to store "constant variables" in program space (mainly for messages displayed on LCD)
-//#include <EEPROM.h>                  //Library for internal EEPROM
-
 #include <TimeLib.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
@@ -33,7 +31,6 @@
                                        // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEO_PIN, NEO_GRB + NEO_KHZ800);
 int onval = 1;
-//int delayval = 500;                    // delay for half a second
 int satval = 0;
 int dispt = 0;
 unsigned long timeOut;                 // Backlight timeout variable
@@ -162,14 +159,14 @@ bool MEASUREMENT = 0;                  // IMPERIAL = 0, METRIC = 1
 
 void setup()
 {
-  pinMode(testPIN, OUTPUT);            //Used as a Digital HIGH Signal
-  pinMode(Element_PIN, INPUT);         //Detect LAND or SEA
-  pinMode(Measurement_PIN, INPUT);     //Detect IMPERIAL or METRIC
-  digitalWrite(testPIN, HIGH);
-  delay(100);
-  ELEMENT = digitalRead(Element_PIN);
-  MEASUREMENT = digitalRead(Measurement_PIN);
-  digitalWrite(testPIN, LOW);
+  pinMode(testPIN, OUTPUT);            //Used as a Digital HIGH Signal                |
+  pinMode(Element_PIN, INPUT);         //Detect LAND or SEA                           |
+  pinMode(Measurement_PIN, INPUT);     //Detect IMPERIAL or METRIC                    |
+  digitalWrite(testPIN, HIGH);         //digitalWrite HIGH takes about 4 microSeconds |-- Uses battery power for <120 microSeconds
+  delay(100);                          //Gives time for the test pin to go HIGH       |
+  ELEMENT = digitalRead(Element_PIN);  //digitalRead takes about 5 microSeconds       |
+  MEASUREMENT = digitalRead(Measurement_PIN);//digitalRead takes about 5 microSeconds |
+  digitalWrite(testPIN, LOW);          //digitalWrite LOW takes about 5 microSeconds  |
   ss.begin(GPSBaud);
   lcd.init();                          // initialize the lcd
   timeOut = millis();                  // Set the initial backlight time
