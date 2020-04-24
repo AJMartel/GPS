@@ -15,54 +15,65 @@
    Thanks to AJMartel https://github.com/AJMartel/GPS for the improved code!
 */
 #include <avr/pgmspace.h>              //Used to store "constant variables" in program space (mainly for messages displayed on LCD)
-//#include <EEPROM.h>                  //Library for internal EEPROM
-
-#include <TimeLib.h>
-#include <TinyGPS++.h>
-#include <SoftwareSerial.h>
-#include "Statistic.h"
 #include <Wire.h>                      // Comes with Arduino IDE++
 #include <LiquidCrystal_I2C.h>
-//LED Driver
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+#include <TimeLib.h>
+#include "Statistic.h"
 #include <Adafruit_NeoPixel.h>
-#define NEO_PIN        7               // Which pin on the Arduino is connected to the NeoPixels?
-                                       // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      4               //set number of pixels here, I have 4 in a strip with the first disabled because it's under the heat shrink.
-                                       // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
-                                       // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-                                       // example for more information on possible values.
+
+/*  NeoPixel LED Driver
+ Which pin on the Arduino is connected to the NeoPixels?
+ How many NeoPixels are attached to the Arduino?
+ set number of pixels here, I have 4 in a strip with the first disabled because it's under the heat shrink.
+ When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
+ Note that for older NeoPixel strips you might need to change the third parameter
+ --see the strandtest example for more information on possible values.
+*/
+#define NEO_PIN            4               
+#define NUMPIXELS          4
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEO_PIN, NEO_GRB + NEO_KHZ800);
-int onval = 1;
-//int delayval = 500;                    // delay for half a second
-int satval = 0;
-int dispt = 0;
-unsigned long timeOut;                 // Backlight timeout variable
-unsigned long previousMillis = 0;      // last time update
-unsigned long interval = 15000;        // interval at which to do something (milliseconds)
-static const int RXPin = 3, TXPin = 4; //GPS Pins
+
+// The serial connection to the GPS device
+#define RXPin              2
+#define TXPin              3
+SoftwareSerial ss(RXPin, TXPin);
+// The TinyGPS++ object
+TinyGPSPlus gps;
+TinyGPSCustom zdop(gps, "GPVTG", 7);   // $GPVTG sentence, 7th element
 static const uint32_t GPSBaud = 9600;  //GPS Baud rate, set to default of Ublox module
 Statistic GPSStats;                    //setup stats
 
-//Time
-uint8_t Hour = 0;
-uint8_t Minute = 0;
-uint8_t Second = 0;
-uint8_t Day = 0;
-uint8_t Month = 0;
-uint16_t Year = 0;
+//NOTE: CHANGE A6 & A7 if not using NANO (Not available on UNO)
+#define Element_PIN        A2          // LAND or SEA        >If SEA the unit will be in Knots, LAND could be MPH or KPH
+#define Measurement_PIN    A1          // IMPERIAL or METRIC or  >If IMPERIAL MPH and Feet, METRIC KPH and Meters       
+#define testPIN            A0          // Used to Trigger Element_PIN and Measurement_PIN 
+#define UTC_offsetPIN0     5           //Used to set offset 1s bit
+#define UTC_offsetPIN1     6           //Used to set offset 2s bit
+#define UTC_offsetPIN2     7           //Used to set offset 4s bit
+#define UTC_offsetPIN3     8           //Used to set offset 8s bit
+#define UTC_offsetPIN4     9           //Used to set offset +/- bit
+              
+bool ELEMENT     = 0;                  // LAND = 0, SEA = 1
+bool MEASUREMENT = 0;                  // IMPERIAL = 0, METRIC = 1
+// Offset hours from gps time (UTC)
+int UTC_offset   = 0;                  // Default ZULU
 
-// The TinyGPS++ object
-TinyGPSPlus gps;
-// The serial connection to the GPS device
-SoftwareSerial ss(RXPin, TXPin);
+//Time
+uint8_t Hour     = 0;
+uint8_t Minute   = 0;
+uint8_t Second   = 0;
+uint8_t Day      = 0;
+uint8_t Month    = 0;
+uint16_t Year    = 0;
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);    // Set the LCD I2C address
 
 //Below are the custom characters for the large speed display
 int x = 0;
 // the 8 arrays that form each segment of the custom numbers
-byte LT[8] =
-{
+byte LT[8] = {
   B00111,
   B01111,
   B11111,
@@ -72,8 +83,8 @@ byte LT[8] =
   B11111,
   B11111
 };
-byte UB[8] =
-{
+
+byte UB[8] = {
   B11111,
   B11111,
   B11111,
@@ -83,8 +94,8 @@ byte UB[8] =
   B00000,
   B00000
 };
-byte RT[8] =
-{
+
+byte RT[8] = {
   B11100,
   B11110,
   B11111,
@@ -94,8 +105,8 @@ byte RT[8] =
   B11111,
   B11111
 };
-byte LL[8] =
-{
+
+byte LL[8] = {
   B11111,
   B11111,
   B11111,
@@ -105,8 +116,8 @@ byte LL[8] =
   B01111,
   B00111
 };
-byte LB[8] =
-{
+
+byte LB[8] = {
   B00000,
   B00000,
   B00000,
@@ -116,8 +127,8 @@ byte LB[8] =
   B11111,
   B11111
 };
-byte LR[8] =
-{
+
+byte LR[8] = {
   B11111,
   B11111,
   B11111,
@@ -127,8 +138,8 @@ byte LR[8] =
   B11110,
   B11100
 };
-byte UMB[8] =
-{
+
+byte UMB[8] = {
   B11111,
   B11111,
   B11111,
@@ -138,8 +149,8 @@ byte UMB[8] =
   B11111,
   B11111
 };
-byte LMB[8] =
-{
+
+byte LMB[8] = {
   B11111,
   B00000,
   B00000,
@@ -150,25 +161,15 @@ byte LMB[8] =
   B11111
 };
 
-TinyGPSCustom zdop(gps, "GPVTG", 7);   // $GPVTG sentence, 7th element
+int onval  = 1;
+int satval = 0;
+int dispt  = 0;
+unsigned long timeOut;                 // Backlight timeout variable
+unsigned long currentMillis  = 0;
+unsigned long previousMillis = 0;      // last time update
+unsigned long interval       = 15000;  // interval at which to do something (milliseconds)
 
-//NOTE: CHANGE A6 & A7 if not using NANO (Not available on UNO)
-#define Element_PIN        A7          // LAND or SEA        >If SEA the unit will be in Knots, LAND could be MPH or KPH
-#define Measurement_PIN    A6          // IMPERIAL or METRIC or  >If IMPERIAL MPH and Feet, METRIC KPH and Meters       
-#define testPIN            A5          // Used to Trigger Element_PIN and Measurement_PIN 
-#define UTC_offsetPIN0     A4          //Used to set offset 1s bit
-#define UTC_offsetPIN1     A3          //Used to set offset 2s bit
-#define UTC_offsetPIN2     A2          //Used to set offset 4s bit
-#define UTC_offsetPIN3     A1          //Used to set offset 8s bit
-#define UTC_offsetPIN4     A0          //Used to set offset +/- bit
-              
-bool ELEMENT = 0;                      // LAND = 0, SEA = 1
-bool MEASUREMENT = 0;                  // IMPERIAL = 0, METRIC = 1
-// Offset hours from gps time (UTC)
-int UTC_offset = 0;                    // Default ZULU
-
-void setup()
-{
+void setup() {
   pinMode(testPIN, OUTPUT);            //Used as a Digital HIGH Signal
   pinMode(Element_PIN, INPUT);         //Detect LAND or SEA
   pinMode(Measurement_PIN, INPUT);     //Detect IMPERIAL or METRIC
@@ -179,16 +180,12 @@ void setup()
   pinMode(UTC_offsetPIN4, INPUT);      //Used to set offset +/- bit
   setConfig();                         //Checks Configuration
   
-  ss.begin(GPSBaud);
-  lcd.init();                          // initialize the lcd
-  timeOut = millis();                  // Set the initial backlight time
+  ss.begin(GPSBaud);                   //Start GPS Module
+  lcd.init();                          //Initialize the lcd
   delay(10);
-  GPSStats.clear();                    //Reset the stats
-                                       //LED Setup
-  pixels.begin();                      // This initializes the NeoPixel library.
-  lcd.clear();                         // clear the screen - intro below!
-                                       // assignes each segment a write number
-  lcd.createChar(1, UB);
+  
+  pixels.begin();                      // This initializes the NeoPixel library.                      
+  lcd.createChar(1, UB);               // assignes each segment a write number
   lcd.createChar(2, RT);
   lcd.createChar(3, LL);
   lcd.createChar(4, LB);
@@ -198,27 +195,25 @@ void setup()
   lcd.createChar(8, LT);
   lcd.backlight();                     // turn on backlight
   lcd.clear();                         // clear the screen - intro below!
-  lcd.setCursor(1, 0);                 // put cursor at colon x and row y
-  lcd.print(F("   MORNINGLION "));        // print a text
-  lcd.setCursor(0, 1);                 // put cursor at colon x and row y
-  lcd.print(F("     INDUSTRIES"));        // print a text
-  lcd.setCursor(1, 2);                 // put cursor at colon x and row y
-  lcd.print(F("GPS data - Lion 4.0"));    // print a text
-  lcd.setCursor(0, 3);                 // put cursor at colon x and row y
-  lcd.print(F("  GPS Speedometer "));     // print a text
+  lcd.setCursor(1, 0);                 // put cursor at column x and row y
+  lcd.print(F("   MORNINGLION "));     // print a text
+  lcd.setCursor(0, 1);                 // put cursor at column x and row y
+  lcd.print(F("     INDUSTRIES"));     // print a text
+  lcd.setCursor(1, 2);                 // put cursor at column x and row y
+  lcd.print(F("GPS data - Lion 4.0")); // print a text
+  lcd.setCursor(0, 3);                 // put cursor at column x and row y
+  lcd.print(F("  GPS Speedometer "));  // print a text
+  GPSStats.clear();                    //Reset the stats
   delay (5000);
   lcd.clear();
 }
 
-void loop() 
-{
+void loop() {
   int speed;
   int satval = gps.satellites.value(); //check sats availible and set to satval
   if (satval >= 13) {
     satval = 12;
   }
-
-
   //below turns off the backlight if it's just waiting for satelites
   if (satval >= 1) {
     timeOut = millis();
@@ -229,12 +224,9 @@ void loop()
     lcd.noBacklight();                 // turn off backlight
     onval = 0;
   }
-
   delay(100);
-
   //LEDs
   // pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-
   if (onval == 1) {
     switch (satval) {
       case 0:
@@ -304,18 +296,15 @@ void loop()
         break;
     }
   }
-
-  if (onval == 0) {                    //if the backlight is off turn off pixels too
+  else {                               //if the backlight is off turn off pixels too
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(1, pixels.Color(0, 0, 0));
     pixels.setPixelColor(2, pixels.Color(0, 0, 0));
-
   }
-
   pixels.show();                       // This sends the updated pixel color to the hardware.
 
-  //clear out data is no sats to prevent false averages
-  unsigned long currentMillis = millis();
+  //clear out data when there are no sats to prevent false averages
+  currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     if (gps.satellites.value() == 0) {
@@ -328,10 +317,12 @@ void loop()
   if (ELEMENT == 0) {
     if (MEASUREMENT == 1) {
       speed = (gps.speed.kmph());      //Speed in kilometers per hour (double)
-    }else{
+    }
+    else {
       speed = (gps.speed.mph());       //Speed in miles per hour (double)
     }
-  }else{
+  }
+  else {
     speed = (gps.speed.knots());       //Speed in knots (double)  
   }
     GPSStats.add(speed);               //Send speed to Stats for average and max
@@ -341,40 +332,38 @@ void loop()
   if (ELEMENT == 0) {
     if (MEASUREMENT == 1) {
       lcd.print(F("KPH"));
-    }else{
+    }
+    else {
       lcd.print(F("MPH"));
     }
-  }else{
+  }
+  else {
     lcd.print(F("Kts"));
   }  
-   
   smartDelay(1000);
 }
 
-void setConfig() 
-{
+void setConfig() {
     digitalWrite(testPIN, HIGH);
     delay(100);
     UTC_offset = digitalRead(UTC_offsetPIN0) | (digitalRead(UTC_offsetPIN1) << 1) | (digitalRead(UTC_offsetPIN2) << 2) | (digitalRead(UTC_offsetPIN3) << 3);
-  if(digitalRead(UTC_offsetPIN4) == 1) 
-  {
-    UTC_offset = UTC_offset * - 1;
+  if(digitalRead(UTC_offsetPIN4) == 1) {
+    UTC_offset = UTC_offset * - 1;     //This will turn the value negative
   }
-  ELEMENT = digitalRead(Element_PIN);
-  MEASUREMENT = digitalRead(Measurement_PIN);
+  ELEMENT = digitalRead(Element_PIN);          //Sets LAND or SEA
+  MEASUREMENT = digitalRead(Measurement_PIN);  //Sets IMPERIAL or METRIC
   digitalWrite(testPIN, LOW);
 }
 
 // This custom version of delay() ensures that the gps object
 // is being "fed".
-static void smartDelay(unsigned long ms)
-{
+static void smartDelay(unsigned long ms) {
   unsigned long start = millis();
-  do
-  {
+  do {
     while (ss.available())
       gps.encode(ss.read());
-  } while (millis() - start < ms);
+  } 
+  while (millis() - start < ms);
 }
 
 
@@ -408,23 +397,29 @@ static void screen() {
 
   //put the : in the time
   lcd.setCursor(12, 1);
-  if (dispt < 10) lcd.print(F(" "));
+  if (dispt < 10) {
+    lcd.print(F(" "));
+  }
   lcd.print(dispt);
   lcd.print(F(":"));
-  if (minute() < 10) lcd.print(F("0"));
+  if (minute() < 10) {
+    lcd.print(F("0"));
+  }
   lcd.print(minute());
 
   //Measure altitude
   lcd.setCursor(14, 2);
   if (MEASUREMENT == 1) {
     lcd.print(gps.altitude.meters());  // Altitude in meters (double)
-  }else{
+  }
+  else {
     lcd.print(gps.altitude.feet());    // Altitude in feet (double)
   }
     lcd.setCursor(15, 3);
   if (MEASUREMENT == 1) {
     lcd.print(F("METER"));
-  }else{
+  }
+  else {
     lcd.print(F("^FEET"));
   }
 
@@ -435,10 +430,12 @@ static void screen() {
   if (ELEMENT == 0) {
     if (MEASUREMENT == 1) {
       lcd.print(F("KPH"));
-    }else{
+    }
+    else {
       lcd.print(F("MPH"));
     }
-  }else{
+  }
+  else {
     lcd.print(F("Kts"));
   }
 
@@ -449,10 +446,12 @@ static void screen() {
   if (ELEMENT == 0) {
     if (MEASUREMENT == 1) {
       lcd.print(F("KPH"));
-    }else{
+    }
+    else {
       lcd.print(F("MPH"));
     }
-  }else{
+  }
+  else {
     lcd.print(F("Kts"));
   }
 
@@ -463,8 +462,7 @@ static void screen() {
 }
 
 
-void custom0O()                        // uses segments to build the number 0
-{
+void custom0O() {                      // uses segments to build the number 0
   lcd.setCursor(x, 2);
   lcd.write(8);
   lcd.write(1);
@@ -475,8 +473,7 @@ void custom0O()                        // uses segments to build the number 0
   lcd.write(5);
 }
 
-void custom1()
-{
+void custom1() {
   lcd.setCursor(x, 2);
   lcd.write(1);
   lcd.write(2);
@@ -486,8 +483,7 @@ void custom1()
   lcd.write(4);
 }
 
-void custom2()
-{
+void custom2() {
   lcd.setCursor(x, 2);
   lcd.write(6);
   lcd.write(6);
@@ -498,8 +494,7 @@ void custom2()
   lcd.write(7);
 }
 
-void custom3()
-{
+void custom3() {
   lcd.setCursor(x, 2);
   lcd.write(6);
   lcd.write(6);
@@ -510,8 +505,7 @@ void custom3()
   lcd.write(5);
 }
 
-void custom4()
-{
+void custom4() {
   lcd.setCursor(x, 2);
   lcd.write(3);
   lcd.write(4);
@@ -520,8 +514,7 @@ void custom4()
   lcd.write(255);
 }
 
-void custom5()
-{
+void custom5() {
   lcd.setCursor(x, 2);
   lcd.write(255);
   lcd.write(6);
@@ -532,8 +525,7 @@ void custom5()
   lcd.write(5);
 }
 
-void custom6()
-{
+void custom6() {
   lcd.setCursor(x, 2);
   lcd.write(8);
   lcd.write(6);
@@ -544,8 +536,7 @@ void custom6()
   lcd.write(5);
 }
 
-void custom7()
-{
+void custom7() {
   lcd.setCursor(x, 2);
   lcd.write(1);
   lcd.write(1);
@@ -554,8 +545,7 @@ void custom7()
   lcd.write(8);
 }
 
-void custom8()
-{
+void custom8() {
   lcd.setCursor(x, 2);
   lcd.write(8);
   lcd.write(6);
@@ -566,8 +556,7 @@ void custom8()
   lcd.write(5);
 }
 
-void custom9()
-{
+void custom9() {
   lcd.setCursor(x, 2);
   lcd.write(8);
   lcd.write(6);
@@ -579,46 +568,35 @@ void custom9()
 }
 
 
-void tempvar(int numar)
-{
-  switch (numar)
-  {
+void tempvar(int numar) {
+  switch (numar) {
     case 0:
       custom0O();
       break;
-
     case 1:
       custom1();
       break;
-
     case 2:
       custom2();
       break;
-
     case 3:
       custom3();
       break;
-
     case 4:
       custom4();
       break;
-
     case 5:
       custom5();
       break;
-
     case 6:
       custom6();
       break;
-
     case 7:
       custom7();
       break;
-
     case 8:
       custom8();
       break;
-
     case 9:
       custom9();
       break;
@@ -626,41 +604,31 @@ void tempvar(int numar)
 }
 
 //calculate the speed
-void speedcalc(int speed)
-{
-
+void speedcalc(int speed) {
   lcd.setCursor(0, 2);
   lcd.print(F("           "));
   lcd.setCursor(0, 3);
   lcd.print(F("           "));
-
-  if (speed >= 100)
-  {
+  if (speed >= 100) {
     x = 0;
     tempvar(int(speed / 100));
     speed = speed % 100;
-
     x = x + 4;
     tempvar(speed / 10);
-
     x = x + 4;
     tempvar(speed % 10);
   }
-  else if (speed >= 10)
-  {
+  else if (speed >= 10) {
     lcd.setCursor(0, 2);
     lcd.print(F("   "));
     lcd.setCursor(0, 3);
     lcd.print(F("   "));
-
     x = 4;
     tempvar(speed / 10);
-
     x = x + 4;
     tempvar(speed % 10);
   }
-  else if (speed < 10)
-  {
+  else if (speed < 10) {
     lcd.setCursor(0, 2);
     lcd.print(F("       "));
     lcd.setCursor(0, 3);
@@ -668,5 +636,4 @@ void speedcalc(int speed)
     x = 8;
     tempvar(speed);
   }
-
 }
