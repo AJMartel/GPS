@@ -289,7 +289,7 @@ void loop() {
 
   pixels.show();                       // This sends the updated pixel color to the hardware.
 
-  //clear out data is no sats to prevent false averages
+  //clear out data when there is no sats to prevent false averages
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
