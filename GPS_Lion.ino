@@ -15,6 +15,8 @@
    Thanks to AJMartel https://github.com/AJMartel/GPS for the improved code!
 */
 #include <avr/pgmspace.h>              //Used to store "constant variables" in program space (mainly for messages displayed on LCD)
+//#include <EEPROM.h>                  //Library for internal EEPROM
+
 #include <TimeLib.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
@@ -31,6 +33,7 @@
                                        // example for more information on possible values.
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEO_PIN, NEO_GRB + NEO_KHZ800);
 int onval = 1;
+//int delayval = 500;                    // delay for half a second
 int satval = 0;
 int dispt = 0;
 unsigned long timeOut;                 // Backlight timeout variable
@@ -47,8 +50,6 @@ uint8_t Second = 0;
 uint8_t Day = 0;
 uint8_t Month = 0;
 uint16_t Year = 0;
-// Offset hours from gps time (UTC)
-int UTC_offset = -5;                   // US CST with DST
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -151,22 +152,33 @@ byte LMB[8] =
 
 TinyGPSCustom zdop(gps, "GPVTG", 7);   // $GPVTG sentence, 7th element
 
-#define testPIN            A0          // Used to Trigger Element_PIN and Measurement_PIN 
-#define Element_PIN        A1          // LAND or SEA        >If SEA the unit will be in Knots, LAND could be MPH or KPH
-#define Measurement_PIN    A2          // IMPERIAL or METRIC or  >If IMPERIAL MPH and Feet, METRIC KPH and Meters                     
+//NOTE: CHANGE A6 & A7 if not using NANO (Not available on UNO)
+#define Element_PIN        A7          // LAND or SEA        >If SEA the unit will be in Knots, LAND could be MPH or KPH
+#define Measurement_PIN    A6          // IMPERIAL or METRIC or  >If IMPERIAL MPH and Feet, METRIC KPH and Meters       
+#define testPIN            A5          // Used to Trigger Element_PIN and Measurement_PIN 
+#define UTC_offsetPIN0     A4          //Used to set offset 1s bit
+#define UTC_offsetPIN1     A3          //Used to set offset 2s bit
+#define UTC_offsetPIN2     A2          //Used to set offset 4s bit
+#define UTC_offsetPIN3     A1          //Used to set offset 8s bit
+#define UTC_offsetPIN4     A0          //Used to set offset +/- bit
+              
 bool ELEMENT = 0;                      // LAND = 0, SEA = 1
 bool MEASUREMENT = 0;                  // IMPERIAL = 0, METRIC = 1
+// Offset hours from gps time (UTC)
+int UTC_offset = 0;                    // Default ZULU
 
 void setup()
 {
-  pinMode(testPIN, OUTPUT);            //Used as a Digital HIGH Signal                |
-  pinMode(Element_PIN, INPUT);         //Detect LAND or SEA                           |
-  pinMode(Measurement_PIN, INPUT);     //Detect IMPERIAL or METRIC                    |
-  digitalWrite(testPIN, HIGH);         //digitalWrite HIGH takes about 4 microSeconds |-- Uses battery power for <120 microSeconds
-  delay(100);                          //Gives time for the test pin to go HIGH       |
-  ELEMENT = digitalRead(Element_PIN);  //digitalRead takes about 5 microSeconds       |
-  MEASUREMENT = digitalRead(Measurement_PIN);//digitalRead takes about 5 microSeconds |
-  digitalWrite(testPIN, LOW);          //digitalWrite LOW takes about 5 microSeconds  |
+  pinMode(testPIN, OUTPUT);            //Used as a Digital HIGH Signal
+  pinMode(Element_PIN, INPUT);         //Detect LAND or SEA
+  pinMode(Measurement_PIN, INPUT);     //Detect IMPERIAL or METRIC
+  pinMode(UTC_offsetPIN0, INPUT);      //Used to set offset 1s bit
+  pinMode(UTC_offsetPIN1, INPUT);      //Used to set offset 2s bit
+  pinMode(UTC_offsetPIN2, INPUT);      //Used to set offset 4s bit
+  pinMode(UTC_offsetPIN3, INPUT);      //Used to set offset 8s bit
+  pinMode(UTC_offsetPIN4, INPUT);      //Used to set offset +/- bit
+  setConfig();                         //Checks Configuration
+  
   ss.begin(GPSBaud);
   lcd.init();                          // initialize the lcd
   timeOut = millis();                  // Set the initial backlight time
@@ -198,7 +210,8 @@ void setup()
   lcd.clear();
 }
 
-void loop() {
+void loop() 
+{
   int speed;
   int satval = gps.satellites.value(); //check sats availible and set to satval
   if (satval >= 13) {
@@ -301,7 +314,7 @@ void loop() {
 
   pixels.show();                       // This sends the updated pixel color to the hardware.
 
-  //clear out data when there is no sats to prevent false averages
+  //clear out data is no sats to prevent false averages
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
@@ -338,6 +351,19 @@ void loop() {
   smartDelay(1000);
 }
 
+void setConfig() 
+{
+    digitalWrite(testPIN, HIGH);
+    delay(100);
+    UTC_offset = digitalRead(UTC_offsetPIN0) | (digitalRead(UTC_offsetPIN1) << 1) | (digitalRead(UTC_offsetPIN2) << 2) | (digitalRead(UTC_offsetPIN3) << 3);
+  if(digitalRead(UTC_offsetPIN4) == 1) 
+  {
+    UTC_offset = UTC_offset * - 1;
+  }
+  ELEMENT = digitalRead(Element_PIN);
+  MEASUREMENT = digitalRead(Measurement_PIN);
+  digitalWrite(testPIN, LOW);
+}
 
 // This custom version of delay() ensures that the gps object
 // is being "fed".
