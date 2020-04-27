@@ -85,6 +85,7 @@ bool ELEMENT     = 0;                  // Pin(A2) Switch(7) LAND = 0, SEA = 1
 bool MEASUREMENT = 0;                  // Pin(A1) Switch(8) IMPERIAL = 0, METRIC = 1
 // Offset hours from gps time (UTC)
 float UTC_offset = 0;                  // Default ZULU
+int localTimeOffset = 0;
 
 //Time
 uint8_t Hour     = 0;
@@ -381,6 +382,7 @@ void setConfig() {
   if(digitalRead(UTC_offsetPIN5) == 1) {
     UTC_offset = UTC_offset * - 1;     //This will turn the value negative
   }
+  localTimeOffset = (UTC_offset * 3600);
   ELEMENT = digitalRead(Element_PIN);          //Sets LAND or SEA
   MEASUREMENT = digitalRead(Measurement_PIN);  //Sets IMPERIAL or METRIC
   digitalWrite(testPIN, LOW);
@@ -409,8 +411,11 @@ static void screen() {
   // Set Time from GPS data string
   setTime(Hour, Minute, Second, Day, Month, Year);
   delay(10);
+  adjustTime(localTimeOffset);
+  delay(10);
   // Calc current Time Zone time by offset value
-  float dispt = (hour() + UTC_offset);
+  //float dispt = (hour() + UTC_offset);
+  int dispt = hour(now() + localTimeOffset);
 
   if (dispt == 0) {
     dispt = (dispt + 12);
