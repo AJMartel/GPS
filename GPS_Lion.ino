@@ -53,12 +53,38 @@ Statistic GPSStats;                    //setup stats
 #define UTC_offsetPIN1     6           //Used to set offset 2s bit
 #define UTC_offsetPIN2     7           //Used to set offset 4s bit
 #define UTC_offsetPIN3     8           //Used to set offset 8s bit
-#define UTC_offsetPIN4     9           //Used to set offset +/- bit
+#define UTC_offsetPIN4     9           //Used to set offset by half an hour
+#define UTC_offsetPIN5     10          //Used to set offset +/- bit
+
+/* Hours
+ * Pin    10 9 8 7 6 5 Value
+ * Switch  6 5 4 3 2 1 
+ *         0 0 0 0 0 0   0
+ *         0 0 0 0 0 1   1
+ *         0 0 0 0 1 0   2
+ *         0 0 0 0 1 1   3 
+ *         0 0 0 1 0 0   4
+ *         0 0 0 1 0 1   5
+ *         0 0 0 1 1 0   6
+ *         0 0 0 1 1 1   7
+ *         0 0 1 0 0 0   8
+ *         0 0 1 0 0 1   9
+ *         0 0 1 0 1 0   10
+ *         0 0 1 0 1 1   11
+ *         0 0 1 1 0 0   12
+ * Modifiers
+ * Pin    10 9 8 7 6 5 Value
+ * Switch  6 5 4 3 2 1
+ *         0 0 0 0 0 0   +0.0 
+ *         0 1 0 0 0 0   +0.5
+ *         0 0 0 0 0 0   +
+ *         0 0 0 0 0 0   -
+ */
               
-bool ELEMENT     = 0;                  // LAND = 0, SEA = 1
-bool MEASUREMENT = 0;                  // IMPERIAL = 0, METRIC = 1
+bool ELEMENT     = 0;                  // Pin(A2) Switch(7) LAND = 0, SEA = 1
+bool MEASUREMENT = 0;                  // Pin(A1) Switch(8) IMPERIAL = 0, METRIC = 1
 // Offset hours from gps time (UTC)
-int UTC_offset   = 0;                  // Default ZULU
+float UTC_offset = 0;                  // Default ZULU
 
 //Time
 uint8_t Hour     = 0;
@@ -177,7 +203,9 @@ void setup() {
   pinMode(UTC_offsetPIN1, INPUT);      //Used to set offset 2s bit
   pinMode(UTC_offsetPIN2, INPUT);      //Used to set offset 4s bit
   pinMode(UTC_offsetPIN3, INPUT);      //Used to set offset 8s bit
-  pinMode(UTC_offsetPIN4, INPUT);      //Used to set offset +/- bit
+  pinMode(UTC_offsetPIN4, INPUT);      //Used to set offset by half an hour
+  pinMode(UTC_offsetPIN5, INPUT);      //Used to set offset +/- bit
+  
   setConfig();                         //Checks Configuration
   
   ss.begin(GPSBaud);                   //Start GPS Module
@@ -348,6 +376,9 @@ void setConfig() {
     delay(100);
     UTC_offset = digitalRead(UTC_offsetPIN0) | (digitalRead(UTC_offsetPIN1) << 1) | (digitalRead(UTC_offsetPIN2) << 2) | (digitalRead(UTC_offsetPIN3) << 3);
   if(digitalRead(UTC_offsetPIN4) == 1) {
+    UTC_offset = UTC_offset + .5;      //This will add half an hour
+  }
+  if(digitalRead(UTC_offsetPIN5) == 1) {
     UTC_offset = UTC_offset * - 1;     //This will turn the value negative
   }
   ELEMENT = digitalRead(Element_PIN);          //Sets LAND or SEA
@@ -379,7 +410,7 @@ static void screen() {
   setTime(Hour, Minute, Second, Day, Month, Year);
   delay(10);
   // Calc current Time Zone time by offset value
-  int dispt = (hour() + UTC_offset);
+  float dispt = (hour() + UTC_offset);
 
   if (dispt == 0) {
     dispt = (dispt + 12);
