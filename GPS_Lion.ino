@@ -415,7 +415,8 @@ static void screen() {
   delay(10);
   // Calc current Time Zone time by offset value
   //float dispt = (hour() + UTC_offset);
-  int dispt = hour(now() + localTimeOffset);
+  //int dispt = hour(now() + localTimeOffset);      //Was this before "adjustTime(localTimeOffset);" REMOVE ONCE TESTED
+   int dispt = hour();
 
   if (dispt == 0) {
     dispt = (dispt + 12);
